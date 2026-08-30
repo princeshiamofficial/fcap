@@ -41,14 +41,13 @@ async function extractCaption(url) {
   return description ? cleanCaption(description) : null;
 }
 
-async function sendMessage(chatId, text, replyToMessageId, inlineKeyboard) {
+async function sendMessage(chatId, text, replyToMessageId) {
   const body = {
     chat_id: chatId,
     text: text,
     parse_mode: 'HTML',
   };
   if (replyToMessageId) body.reply_to_message_id = replyToMessageId;
-  if (inlineKeyboard) body.reply_markup = { inline_keyboard: inlineKeyboard };
 
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: 'POST',
@@ -115,11 +114,6 @@ module.exports = async function handler(req, res) {
 
     if (caption) {
       const response = `📝 <b>Caption:</b>\n\n${caption}`;
-      const copyButton = [[{
-        text: '📋 Copy Caption',
-        copy_text: { text: caption }
-      }]];
-
       // Telegram has a 4096 char limit per message
       if (response.length > 4096) {
         // Split into chunks
@@ -131,11 +125,10 @@ module.exports = async function handler(req, res) {
         }
         for (let i = 0; i < chunks.length; i++) {
           const prefix = i === 0 ? '📝 <b>Caption:</b>\n\n' : `(continued ${i + 1}/${chunks.length})\n\n`;
-          const buttons = i === chunks.length - 1 ? copyButton : undefined;
-          await sendMessage(chatId, prefix + chunks[i], i === 0 ? msgId : undefined, buttons);
+          await sendMessage(chatId, prefix + chunks[i], i === 0 ? msgId : undefined);
         }
       } else {
-        await sendMessage(chatId, response, msgId, copyButton);
+        await sendMessage(chatId, response, msgId);
       }
     } else {
       await sendMessage(chatId, '❌ Could not extract caption. The post may be private or the URL is invalid.', msgId);
