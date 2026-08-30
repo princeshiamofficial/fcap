@@ -1,0 +1,8 @@
+{
+  "name": "fb-caption-api",
+  "version": "1.0.0",
+  "description": "Facebook video/reel caption extractor API",
+  "dependencies": {
+    "cheerio": "^1.0.0"
+  }
+}

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FB Caption Extractor API</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e4e4e7; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .container { width: 100%; max-width: 560px; padding: 24px; }
+    h1 { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .subtitle { font-size: 13px; color: #71717a; margin-bottom: 24px; }
+    .input-group { display: flex; gap: 8px; margin-bottom: 16px; }
+    input[type="text"] { flex: 1; padding: 10px 14px; background: #18181b; border: 1px solid #27272a; border-radius: 8px; color: #e4e4e7; font-size: 14px; outline: none; }
+    input:focus { border-color: #3b82f6; }
+    button { padding: 10px 20px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    button:hover { background: #2563eb; }
+    button:disabled { background: #3f3f46; cursor: not-allowed; }
+    .result { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 16px; display: none; }
+    .result.show { display: block; }
+    .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .label { font-size: 12px; font-weight: 600; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.5px; }
+    .copy-btn { padding: 4px 10px; background: #27272a; border: none; border-radius: 6px; color: #e4e4e7; font-size: 12px; cursor: pointer; }
+    .copy-btn:hover { background: #3f3f46; }
+    textarea { width: 100%; min-height: 120px; padding: 12px; background: #09090b; border: 1px solid #27272a; border-radius: 8px; color: #e4e4e7; font-size: 13px; font-family: inherit; resize: vertical; line-height: 1.6; }
+    .meta { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .meta-item { padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 8px; }
+    .meta-label { font-size: 11px; color: #71717a; margin-bottom: 4px; }
+    .meta-value { font-size: 13px; color: #e4e4e7; word-break: break-all; }
+    .error { margin-top: 16px; padding: 12px; background: #1c1917; border: 1px solid #7f1d1d; border-radius: 8px; color: #fca5a5; font-size: 13px; display: none; }
+    .error.show { display: block; }
+    .docs { margin-top: 20px; padding: 16px; background: #18181b; border: 1px solid #27272a; border-radius: 10px; }
+    .docs h3 { font-size: 14px; margin-bottom: 10px; color: #e4e4e7; }
+    code { display: block; padding: 12px; background: #09090b; border-radius: 6px; font-size: 12px; color: #a1a1aa; overflow-x: auto; white-space: pre; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>FB Caption Extractor</h1>
+    <p class="subtitle">Extract descriptions from Facebook videos, reels, and posts</p>
+
+    <div class="input-group">
+      <input type="text" id="urlInput" placeholder="Paste Facebook URL..." />
+      <button id="extractBtn" onclick="extract()">Extract</button>
+    </div>
+
+    <div id="error" class="error"></div>
+
+    <div id="result" class="result">
+      <div class="result-header">
+        <span class="label">Description</span>
+        <button class="copy-btn" onclick="copyText()">Copy</button>
+      </div>
+      <textarea id="captionText" readonly></textarea>
+
+      <div class="meta" id="metaSection">
+        <div class="meta-item">
+          <div class="meta-label">Title</div>
+          <div class="meta-value" id="metaTitle">-</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Type</div>
+          <div class="meta-value" id="metaType">-</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Duration</div>
+          <div class="meta-value" id="metaDuration">-</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Extracted</div>
+          <div class="meta-value" id="metaTime">-</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="docs">
+      <h3>API Usage</h3>
+      <code>GET /api/extract?url=https://www.facebook.com/reel/123456</code>
+    </div>
+  </div>
+
+  <script>
+    async function extract() {
+      const url = document.getElementById('urlInput').value.trim();
+      if (!url) return;
+
+      const btn = document.getElementById('extractBtn');
+      const result = document.getElementById('result');
+      const error = document.getElementById('error');
+
+      btn.disabled = true;
+      btn.textContent = 'Extracting...';
+      result.classList.remove('show');
+      error.classList.remove('show');
+
+      try {
+        const res = await fetch(`/api/extract?url=${encodeURIComponent(url)}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to extract');
+        }
+
+        document.getElementById('captionText').value = data.description || 'No description found';
+        document.getElementById('metaTitle').textContent = data.title || '-';
+        document.getElementById('metaType').textContent = data.type || '-';
+        document.getElementById('metaDuration').textContent = data.duration ? `${Math.floor(data.duration / 60)}m ${data.duration % 60}s` : '-';
+        document.getElementById('metaTime').textContent = data.extractedAt ? new Date(data.extractedAt).toLocaleTimeString() : '-';
+
+        result.classList.add('show');
+      } catch (err) {
+        error.textContent = err.message;
+        error.classList.add('show');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Extract';
+      }
+    }
+
+    function copyText() {
+      const text = document.getElementById('captionText').value;
+      navigator.clipboard.writeText(text);
+    }
+
+    document.getElementById('urlInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') extract();
+    });
+  </script>
+</body>
+</html>
