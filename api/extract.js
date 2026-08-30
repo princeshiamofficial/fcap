@@ -1,16 +1,9 @@
 const cheerio = require('cheerio');
 
 const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.5',
-  'Accept-Encoding': 'gzip, deflate, br',
-  'Connection': 'keep-alive',
-  'Upgrade-Insecure-Requests': '1',
-  'Sec-Fetch-Dest': 'document',
-  'Sec-Fetch-Mode': 'navigate',
-  'Sec-Fetch-Site': 'none',
-  'Sec-Fetch-User': '?1',
 };
 
 function cleanCaption(text) {
@@ -148,7 +141,14 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const response = await fetch(url, {
+    // Convert to m.facebook.com for better server-side access
+    let fetchUrl = url;
+    if (url.includes('www.facebook.com')) {
+      fetchUrl = url.replace('www.facebook.com', 'm.facebook.com');
+    } else if (url.includes('facebook.com') && !url.includes('m.facebook.com')) {
+      fetchUrl = url.replace('facebook.com', 'm.facebook.com');
+    }
+    const response = await fetch(fetchUrl, {
       headers: HEADERS,
       redirect: 'follow',
     });
