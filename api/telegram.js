@@ -20,6 +20,16 @@ function cleanCaption(text) {
 }
 
 async function extractCaption(url) {
+  // TikTok — use oEmbed
+  if (url.match(/tiktok\.com/i)) {
+    const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
+    const oembedRes = await fetch(oembedUrl);
+    if (!oembedRes.ok) return null;
+    const oembed = await oembedRes.json();
+    return oembed.title ? cleanCaption(oembed.title) : null;
+  }
+
+  // Facebook
   let fetchUrl = url;
   if (url.includes('www.facebook.com')) {
     fetchUrl = url.replace('www.facebook.com', 'm.facebook.com');
@@ -57,7 +67,7 @@ async function sendMessage(chatId, text, replyToMessageId) {
 }
 
 function extractUrl(text) {
-  const urlRegex = /https?:\/\/(www\.|m\.|mbasic\.)?(facebook\.com|fb\.watch|fb\.com)\/\S+/gi;
+  const urlRegex = /https?:\/\/(www\.|m\.|mbasic\.|vm\.)?(facebook\.com|fb\.watch|fb\.com|tiktok\.com)\/\S+/gi;
   const match = text.match(urlRegex);
   return match ? match[0] : null;
 }
@@ -83,9 +93,11 @@ module.exports = async function handler(req, res) {
     // /start command
     if (text === '/start') {
       await sendMessage(chatId,
-        `🟢 <b>FB Caption Extractor Bot</b>\n\n` +
-        `Send me a Facebook video/reel/post link and I'll extract the description for you.\n\n` +
-        `Example:\n<code>https://www.facebook.com/reel/123456</code>`,
+        `🟢 <b>Caption Extractor Bot</b>\n\n` +
+        `Send me a Facebook or TikTok link and I'll extract the description for you.\n\n` +
+        `Examples:\n` +
+        `<code>https://www.facebook.com/reel/123456</code>\n` +
+        `<code>https://www.tiktok.com/@user/video/123</code>`,
         msgId
       );
       return res.status(200).json({ ok: true });
@@ -94,16 +106,16 @@ module.exports = async function handler(req, res) {
     // /help command
     if (text === '/help') {
       await sendMessage(chatId,
-        `Just send any Facebook URL (reel, video, post) and I'll reply with the full caption/description.`,
+        `Just send any Facebook or TikTok URL (reel, video, post) and I'll reply with the full caption/description.`,
         msgId
       );
       return res.status(200).json({ ok: true });
     }
 
-    // Check for Facebook URL
+    // Check for URL
     const url = extractUrl(text);
     if (!url) {
-      await sendMessage(chatId, '⚠️ Please send a valid Facebook URL.', msgId);
+      await sendMessage(chatId, '⚠️ Please send a valid Facebook or TikTok URL.', msgId);
       return res.status(200).json({ ok: true });
     }
 

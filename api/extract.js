@@ -133,15 +133,37 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // Validate Facebook URL
-  if (!url.match(/facebook\.com|fb\.watch|fb\.com/i)) {
+  // Validate URL
+  const isFacebook = url.match(/facebook\.com|fb\.watch|fb\.com/i);
+  const isTiktok = url.match(/tiktok\.com/i);
+  if (!isFacebook && !isTiktok) {
     return res.status(400).json({
-      error: 'Invalid URL. Must be a Facebook URL (facebook.com or fb.watch)'
+      error: 'Invalid URL. Must be a Facebook (facebook.com, fb.watch) or TikTok (tiktok.com) URL'
     });
   }
 
   try {
-    // Convert to m.facebook.com for better server-side access
+    // TikTok — use oEmbed API (only reliable server-side method)
+    if (isTiktok) {
+      const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
+      const oembedRes = await fetch(oembedUrl);
+      if (!oembedRes.ok) {
+        return res.status(502).json({ error: `Failed to fetch TikTok oEmbed (${oembedRes.status})`, url });
+      }
+      const oembed = await oembedRes.json();
+      return res.status(200).json({
+        url: url,
+        description: cleanCaption(oembed.title) || null,
+        title: oembed.author_name || null,
+        type: 'video',
+        thumbnail: oembed.thumbnail_url || null,
+        author: oembed.author_name || null,
+        authorUrl: oembed.author_url || null,
+        extractedAt: new Date().toISOString(),
+      });
+    }
+
+    // Facebook — convert to m.facebook.com for better server-side access
     let fetchUrl = url;
     if (url.includes('www.facebook.com')) {
       fetchUrl = url.replace('www.facebook.com', 'm.facebook.com');
@@ -170,7 +192,6 @@ module.exports = async function handler(req, res) {
     const scriptDesc = extractFromScriptData($);
 
     // Pick the best description — prefer the longest text available
-    // Facebook sometimes puts full text in og:title while og:description is truncated
     const candidates = [htmlDesc, jsonLdDesc, scriptDesc, meta.description, meta.title].filter(Boolean);
     const description = candidates.sort((a, b) => b.length - a.length)[0] || '';
 
@@ -195,7 +216,6 @@ module.exports = async function handler(req, res) {
       extractedAt: new Date().toISOString(),
     };
 
-    // Add debug info if no description found
     if (!description) {
       result._debug = {
         note: 'Could not extract description. Facebook may require authentication or use client-side rendering.',
