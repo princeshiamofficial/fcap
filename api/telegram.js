@@ -20,13 +20,28 @@ function cleanCaption(text) {
 }
 
 async function extractCaption(url) {
-  // TikTok — use oEmbed
+  // TikTok — resolve short URLs, then use oEmbed
   if (url.match(/tiktok\.com/i)) {
-    const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
+    let resolvedUrl = url;
+    if (url.includes('vt.tiktok.com') || url.includes('vm.tiktok.com')) {
+      const resolveRes = await fetch(url, { redirect: 'follow' });
+      if (resolveRes.ok) resolvedUrl = resolveRes.url;
+    }
+    const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(resolvedUrl)}`;
     const oembedRes = await fetch(oembedUrl);
-    if (!oembedRes.ok) return null;
-    const oembed = await oembedRes.json();
-    return oembed.title ? cleanCaption(oembed.title) : null;
+    if (oembedRes.ok) {
+      const oembed = await oembedRes.json();
+      if (oembed.title) return cleanCaption(oembed.title);
+    }
+    // Fallback: return author + note for photo posts
+    const htmlRes = await fetch(resolvedUrl, { headers: HEADERS, redirect: 'follow' });
+    if (htmlRes.ok) {
+      const html = await htmlRes.text();
+      const $ = cheerio.load(html);
+      const title = $('title').text().trim();
+      if (title) return title + '\n\n(Photo post — caption not available via server-side extraction)';
+    }
+    return null;
   }
 
   // Facebook

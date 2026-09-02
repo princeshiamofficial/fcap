@@ -143,24 +143,54 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // TikTok — use oEmbed API (only reliable server-side method)
+    // TikTok — resolve short URLs, then use oEmbed
     if (isTiktok) {
-      const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
-      const oembedRes = await fetch(oembedUrl);
-      if (!oembedRes.ok) {
-        return res.status(502).json({ error: `Failed to fetch TikTok oEmbed (${oembedRes.status})`, url });
+      // Resolve vt.tiktok.com short URLs to full URL
+      let resolvedUrl = url;
+      if (url.includes('vt.tiktok.com') || url.includes('vm.tiktok.com')) {
+        const resolveRes = await fetch(url, { redirect: 'follow' });
+        if (resolveRes.ok) resolvedUrl = resolveRes.url;
       }
-      const oembed = await oembedRes.json();
-      return res.status(200).json({
-        url: url,
-        description: cleanCaption(oembed.title) || null,
-        title: oembed.author_name || null,
-        type: 'video',
-        thumbnail: oembed.thumbnail_url || null,
-        author: oembed.author_name || null,
-        authorUrl: oembed.author_url || null,
-        extractedAt: new Date().toISOString(),
+
+      // Try oEmbed first (works for videos)
+      const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(resolvedUrl)}`;
+      const oembedRes = await fetch(oembedUrl);
+      if (oembedRes.ok) {
+        const oembed = await oembedRes.json();
+        return res.status(200).json({
+          url: resolvedUrl,
+          description: cleanCaption(oembed.title) || null,
+          title: oembed.author_name || null,
+          type: 'video',
+          thumbnail: oembed.thumbnail_url || null,
+          author: oembed.author_name || null,
+          authorUrl: oembed.author_url || null,
+          extractedAt: new Date().toISOString(),
+        });
+      }
+
+      // Fallback: extract from HTML (for photo posts)
+      const htmlRes = await fetch(resolvedUrl, {
+        headers: HEADERS,
+        redirect: 'follow',
       });
+      if (htmlRes.ok) {
+        const html = await htmlRes.text();
+        const $ = cheerio.load(html);
+        const title = $('title').text().trim();
+        const ogImage = $('meta[property="og:image"]').attr('content');
+        return res.status(200).json({
+          url: resolvedUrl,
+          description: null,
+          title: title || null,
+          type: 'photo',
+          thumbnail: ogImage || null,
+          extractedAt: new Date().toISOString(),
+          _note: 'TikTok photo posts do not expose captions via oEmbed. Description unavailable.',
+        });
+      }
+
+      return res.status(502).json({ error: 'Failed to fetch TikTok content', url: resolvedUrl });
     }
 
     // Facebook — convert to m.facebook.com for better server-side access
