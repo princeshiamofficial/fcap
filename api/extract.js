@@ -171,22 +171,39 @@ module.exports = async function handler(req, res) {
 
       // Fallback: extract from HTML (for photo posts)
       const htmlRes = await fetch(resolvedUrl, {
-        headers: HEADERS,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+          'Accept': 'text/html',
+          'Accept-Language': 'en-US,en;q=0.5',
+        },
         redirect: 'follow',
       });
       if (htmlRes.ok) {
         const html = await htmlRes.text();
         const $ = cheerio.load(html);
+
+        // Try UNIVERSAL_DATA / SIGI_STATE for desc field
+        let desc = null;
+        const descMatch = html.match(/"desc"\s*:\s*"([^"]{5,})"/);
+        if (descMatch) {
+          try {
+            desc = descMatch[1]
+              .replace(/\\u[\dA-Fa-f]{4}/g, (m) => String.fromCharCode(parseInt(m.slice(2), 16)))
+              .replace(/\\n/g, '\n')
+              .replace(/\\"/g, '"');
+          } catch {}
+        }
+
         const title = $('title').text().trim();
         const ogImage = $('meta[property="og:image"]').attr('content');
+
         return res.status(200).json({
           url: resolvedUrl,
-          description: null,
+          description: desc ? cleanCaption(desc) : null,
           title: title || null,
           type: 'photo',
           thumbnail: ogImage || null,
           extractedAt: new Date().toISOString(),
-          _note: 'TikTok photo posts do not expose captions via oEmbed. Description unavailable.',
         });
       }
 

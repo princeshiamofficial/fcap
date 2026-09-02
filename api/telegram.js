@@ -33,13 +33,31 @@ async function extractCaption(url) {
       const oembed = await oembedRes.json();
       if (oembed.title) return cleanCaption(oembed.title);
     }
-    // Fallback: return author + note for photo posts
-    const htmlRes = await fetch(resolvedUrl, { headers: HEADERS, redirect: 'follow' });
+    // Fallback: extract from HTML (for photo posts)
+    const htmlRes = await fetch(resolvedUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+        'Accept': 'text/html',
+        'Accept-Language': 'en-US,en;q=0.5',
+      },
+      redirect: 'follow',
+    });
     if (htmlRes.ok) {
       const html = await htmlRes.text();
       const $ = cheerio.load(html);
+      // Try UNIVERSAL_DATA for desc field
+      const descMatch = html.match(/"desc"\s*:\s*"([^"]{5,})"/);
+      if (descMatch) {
+        try {
+          const desc = descMatch[1]
+            .replace(/\\u[\dA-Fa-f]{4}/g, (m) => String.fromCharCode(parseInt(m.slice(2), 16)))
+            .replace(/\\n/g, '\n')
+            .replace(/\\"/g, '"');
+          return cleanCaption(desc);
+        } catch {}
+      }
       const title = $('title').text().trim();
-      if (title) return title + '\n\n(Photo post — caption not available via server-side extraction)';
+      if (title) return title;
     }
     return null;
   }
